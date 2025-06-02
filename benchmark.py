@@ -2,11 +2,6 @@ import pyterrier as pt
 from pyterrier_anserini import AnseriniIndex
 import pandas as pd
 
-pt.java.init()
-tokenizer = pt.autoclass("org.terrier.indexing.tokenisation.Tokeniser").getTokeniser()
-def strip_markup(text):
-    return " ".join(tokenizer.getTokens(text))
-
 #Read qrels
 qrels = pd.read_csv("./queries/train_qrels.csv", dtype={'qid': 'object', 'docno': 'object', 'label': 'int64'})
 topics = pd.read_csv("./queries/train_queries.csv", dtype={'qid': 'object', 'query': 'object'})
