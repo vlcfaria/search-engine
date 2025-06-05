@@ -9,6 +9,8 @@ pip install -r requirements.txt
 
 ## For indexing
 
+### Index using pyserini (more standard)
+
 Convert corpus first:
 
 ```bash
@@ -17,7 +19,6 @@ $ python convert.py
 $ mv converted.jsonl collection
 ```
 
-Index using pyserini
 ```bash
 $ mkdir index
 $ python -m pyserini.index.lucene \
@@ -27,6 +28,14 @@ $ python -m pyserini.index.lucene \
 --generator DefaultLuceneDocumentGenerator \
 --threads 8 \
 --storePositions -storeDocvectors
+```
+
+### Index using Pyterrier (more customizable)
+
+Using standard (non-converted) corpus
+
+```bash
+$ python index_pyterrier.py -i <path to corpus> -o <output directory>
 ```
 
 Run experiment with PyTerrier:
