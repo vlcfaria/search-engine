@@ -1,14 +1,14 @@
 import pandas as pd
 import pyterrier as pt
 
-def Experiment():
+class Experiment():
     def __init__(self, index_path: str, corpus_path: str = '') -> None:
         self.name = 'abstract'
 
         if corpus_path:
-            self.index = build_index(index_path, corpus_path)
+            self.index = self.build_index(index_path, corpus_path)
         else:
-            self.index = get_index(index_path)
+            self.index = self.get_index(index_path)
 
         self.search_pipeline = None
         
