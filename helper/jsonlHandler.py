@@ -19,6 +19,6 @@ def transform_fields(raw: dict[str, str]) -> dict[str,str]:
     'Transform an entity dictionary into an entity with multiple fields'
 
     return {'docno': raw['id'],
-            'title': raw['title'],
-            'text': raw['text'], 
-            'keywords': ' \n '.join(raw['keywords'])}
+            'TITLE': raw['title'],
+            'TEXT': raw['text'], 
+            'KEYWORDS': ' \n '.join(raw['keywords'])}
