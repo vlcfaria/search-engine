@@ -31,6 +31,10 @@ class BM25MART(Experiment):
 
         dph = pt.terrier.Retriever(self.index, wmodel='DPH')
         pl2 = pt.terrier.Retriever(self.index, wmodel='PL2')
+        dfr = pt.terrier.Retriever(self.index, wmodel='DFR_BM25')
+        dlh = pt.terrier.Retriever(self.index, wmodel='DLH')
+
+        sdm = pt.rewrite.SequentialDependence() >> bm25_features
 
         dph_title = pt.apply.query(search_field('TITLE')) >> dph
         dph_text = pt.apply.query(search_field('TEXT')) >> dph
@@ -39,7 +43,6 @@ class BM25MART(Experiment):
         pl2_title = pt.apply.query(search_field('TITLE')) >> pl2
         pl2_text = pt.apply.query(search_field('TEXT')) >> pl2
         pl2_keywords = pt.apply.query(search_field('KEYWORDS')) >> pl2
-
 
         query_len = pt.apply.doc_score(lambda row: len(row['query_0']))
         #This resolves to the number of words (after stopword removal) of the 'text' field
@@ -50,8 +53,10 @@ class BM25MART(Experiment):
             dph ** pl2 ** #Other retrieval models
             query_len ** doc_len_text ** #Static features
             initial_retrieval #Also use initial retrieval signal
-            ** dph_title ** dph_text ** dph_keywords **
-            pl2_title ** pl2_text ** pl2_keywords
+            ** dfr ** dlh ** # ADD NEW MODELS
+            sdm# ADD PROXIMITY
+            #** dph_title ** dph_text ** dph_keywords **
+            #pl2_title ** pl2_text ** pl2_keywords
         )
 
         #Establishing LTR --
@@ -73,17 +78,22 @@ class BM25MART(Experiment):
 
         #Training -- 
         qrels = pd.read_csv(qrels_path, 
-                            dtype={'qid': 'object', 'docno': 'object', 'label': 'int64'})
+                            dtype={'qid': 'object', 'docno': 'object', 'relevance': 'int64'})
         topics = pd.read_csv(topics_path, 
                              dtype={'qid': 'object', 'query': 'object'})
         
         train_topics, valid_topics, test_topics = np.split( #shuffle topics
-            topics.sample(frac=1, random_state=42),
+            topics.sample(frac=1, random_state=43),
             [int(.6*len(topics)), int(.8*len(topics))]
         )
 
         self.search_pipeline.fit(train_topics, qrels, valid_topics, qrels)
         print(lmart.feature_importances_)
+
+        ans = pt.Experiment([self.search_pipeline], test_topics, qrels, 
+                            eval_metrics=['recip_rank', 'ndcg_cut', 'recall'], 
+                            names=[self.name])
+        print(ans)
             
     def get_index(self, index_path: str):
         return pt.IndexFactory.of(f"{index_path}/data.properties")
@@ -91,13 +101,14 @@ class BM25MART(Experiment):
     def build_index(self, index_path: str, corpus_path: str):
         #Index fields
         return (pt.IterDictIndexer(index_path, meta={'docno': 20}, 
-                            text_attrs=['TITLE', 'TEXT', 'KEYWORDS'], 
+                            text_attrs=['title', 'text', 'keywords'], 
                             fields=True, blocks=True, threads=8)
                 .index(iter_jsonl(corpus_path, transform_fields)))
 
 
 if __name__ == '__main__':
     s = BM25MART('./terrier_index_fields', './queries/train_queries.csv', './queries/train_qrels.csv', './dataset/corpus.jsonl')
+    #!!! UPDATE index.direct.fields.names and index.inverted.fields.names TO UPPERCASE LATER (TITLE,TEXT,KEYWORDS)
 
     s.benchmark('./queries/train_queries.csv', './queries/train_qrels.csv')
     s.results_tests('./queries/test_queries.csv', './queries')
