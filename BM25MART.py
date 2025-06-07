@@ -94,3 +94,10 @@ class BM25MART(Experiment):
                             text_attrs=['TITLE', 'TEXT', 'KEYWORDS'], 
                             fields=True, blocks=True, threads=8)
                 .index(iter_jsonl(corpus_path, transform_fields)))
+
+
+if __name__ == '__main__':
+    s = BM25MART('./terrier_index_fields', './queries/train_queries.csv', './queries/train_qrels.csv', './dataset/corpus.jsonl')
+
+    s.benchmark('./queries/train_queries.csv', './queries/train_qrels.csv')
+    s.results_tests('./queries/test_queries.csv', './queries')
