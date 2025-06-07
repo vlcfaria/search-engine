@@ -108,7 +108,7 @@ class BM25MART(Experiment):
 
 if __name__ == '__main__':
     s = BM25MART('./terrier_index_fields', './queries/train_queries.csv', './queries/train_qrels.csv', './dataset/corpus.jsonl')
-    #!!! UPDATE index.direct.fields.names and index.inverted.fields.names TO UPPERCASE LATER (TITLE,TEXT,KEYWORDS)
+    #!!! UPDATE DATA.PROPERTIES index.direct.fields.names and index.inverted.fields.names TO UPPERCASE LATER (TITLE,TEXT,KEYWORDS)
 
     s.benchmark('./queries/train_queries.csv', './queries/train_qrels.csv')
     s.results_tests('./queries/test_queries.csv', './queries')
