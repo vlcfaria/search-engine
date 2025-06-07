@@ -2,44 +2,88 @@ from Experiment import Experiment
 import pyterrier as pt
 from helper.jsonlHandler import iter_jsonl, transform_fields
 import xgboost as xgb
+import numpy as np
+import pandas as pd
 
 class BM25MART(Experiment):
     '''BM25 with LambdaMART'''
-    def __init__(self, index_path: str, corpus_path: str= ''):
+    def __init__(self, index_path: str, topics_path: str, qrels_path: str, corpus_path: str= ''):
         super().__init__(index_path, corpus_path)
 
         #Make sure we have 3 fields on the index
         assert 3 == self.index.getCollectionStatistics().getNumberOfFields()
+
+        self.docindex = self.index.getDocumentIndex()
         
         self.name = 'bm25MART'
 
-        search_field = lambda field,val: f"{field}({val})"
-
-        #Title features
-        title = pt.apply() >> pt.rewrite.tokenise()
-
-        #Body features
-
-        #Keyword features
-
-        #Retrieve with BM25
-        self.search_pipeline = pt.rewrite.tokenise() >> pt.terrier.Retriever(self.index, wmodel='BM25')
-
-        # this configures xgb as LambdaMART
-        params = {'objective': 'rank:ndcg', 
-                'learning_rate': 0.1, 
-                'gamma': 1.0, 'min_child_weight': 0.1,
-                'max_depth': 6,
-                'verbose': 2,
-                'random_state': 42 
-                }
+        def search_field(field):
+            return lambda q: f"{field}:({q['query']})"
         
-        #Add to final pipeline
-        lambaMART = pt.ltr.apply_learned_model(xgb.sklearn.XGBRanker(**params), form='ltr')
-        self.search_pipeline = self.search_pipeline >> lambaMART
+        #Defining the initial retrieval process --
+        initial_retrieval = pt.terrier.Retriever(self.index, wmodel='BM25', controls={"bm25.b" : 0.75, "bm25.k_1": 1.2, "bm25.k_3": 1.2})
+                
+        #Feature engineering --
+        bm25_features = pt.terrier.Retriever(self.index, wmodel='BM25')
+        title = pt.apply.query(search_field('TITLE')) >> bm25_features
+        body = pt.apply.query(search_field('TEXT')) >> bm25_features
+        keywords = pt.apply.query(search_field('KEYWORDS')) >> bm25_features
 
-        #Train our lambdaMART, will fit on our pipeline features
-        self.search_pipeline.fit()
+        dph = pt.terrier.Retriever(self.index, wmodel='DPH')
+        pl2 = pt.terrier.Retriever(self.index, wmodel='PL2')
+
+        dph_title = pt.apply.query(search_field('TITLE')) >> dph
+        dph_text = pt.apply.query(search_field('TEXT')) >> dph
+        dph_keywords = pt.apply.query(search_field('KEYWORDS')) >> dph
+        
+        pl2_title = pt.apply.query(search_field('TITLE')) >> pl2
+        pl2_text = pt.apply.query(search_field('TEXT')) >> pl2
+        pl2_keywords = pt.apply.query(search_field('KEYWORDS')) >> pl2
+
+
+        query_len = pt.apply.doc_score(lambda row: len(row['query_0']))
+        #This resolves to the number of words (after stopword removal) of the 'text' field
+        doc_len_text = pt.apply.doc_score(lambda row: self.docindex.getDocumentLength(row['docid']))
+
+        features_pipe = (
+            title ** body ** keywords ** #Fielded BM25
+            dph ** pl2 ** #Other retrieval models
+            query_len ** doc_len_text ** #Static features
+            initial_retrieval #Also use initial retrieval signal
+            ** dph_title ** dph_text ** dph_keywords **
+            pl2_title ** pl2_text ** pl2_keywords
+        )
+
+        #Establishing LTR --
+        #this configures xgb as LambdaMART
+        lmart = xgb.sklearn.XGBRanker(objective='rank:ndcg',
+            learning_rate=0.05,
+            gamma=1.0,
+            min_child_weight=0.1,
+            n_estimators=200,
+            max_depth=6,
+            verbose=2,
+            random_state=42)
+        lambdaMART = pt.ltr.apply_learned_model(lmart, form='ltr')
+        
+        #Building the full pipeline -- 
+        # Tokenize -> Initial retrieval -> Build features -> LambdaMART
+        self.search_pipeline = pt.rewrite.tokenise() >> initial_retrieval >> features_pipe >> lambdaMART
+        self.search_pipeline.compile()
+
+        #Training -- 
+        qrels = pd.read_csv(qrels_path, 
+                            dtype={'qid': 'object', 'docno': 'object', 'label': 'int64'})
+        topics = pd.read_csv(topics_path, 
+                             dtype={'qid': 'object', 'query': 'object'})
+        
+        train_topics, valid_topics, test_topics = np.split( #shuffle topics
+            topics.sample(frac=1, random_state=42),
+            [int(.6*len(topics)), int(.8*len(topics))]
+        )
+
+        self.search_pipeline.fit(train_topics, qrels, valid_topics, qrels)
+        print(lmart.feature_importances_)
             
     def get_index(self, index_path: str):
         return pt.IndexFactory.of(f"{index_path}/data.properties")
