@@ -25,6 +25,7 @@ class Experiment():
 
         qrels = pd.read_csv(qrels_path, 
                             dtype={'qid': 'object', 'docno': 'object', 'label': 'int64'})
+
         topics = pd.read_csv(topics_path, 
                              dtype={'qid': 'object', 'query': 'object'})
         
@@ -43,8 +44,9 @@ class Experiment():
         #Load queries
         queries = pd.read_csv(test_query_path)
 
-        #Transform applies the search
-        df_ans = self.search_pipeline.transform(queries)
+        #Transform applies the search, cutoff at 100
+        df_ans = (self.search_pipeline % 100).transform(queries)
+        df_ans = df_ans.sort_values(['qid', 'rank']) #Sort by rank, just in case
 
         #Detailed result
         df_ans.to_csv(f'{out_dir}/{self.name}-test-results.csv', index=False)
