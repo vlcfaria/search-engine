@@ -1,2 +1,7 @@
 pandas==2.2.3
 python_terrier==0.13.0
+transformers==4.49
+xgboost
+ragatouille
+psutil
+faiss-gpu-cu12
