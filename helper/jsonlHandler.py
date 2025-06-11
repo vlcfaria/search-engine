@@ -12,7 +12,7 @@ def iter_jsonl(filename: str, transform):
 def transform_raw(raw: dict[str, str]) -> dict[str,str]:
     'Transform an entity dictionary into another entity with a single text field'
 
-    text = ' \n '.join([raw['title'], raw['text'], ' \n '.join(raw['keywords'])])
+    text = ' \n '.join([raw['title'], raw['text'], ', '.join(raw['keywords'])])
     return {'docno': raw['id'], 'text': text}
 
 def transform_fields(raw: dict[str, str]) -> dict[str,str]:
