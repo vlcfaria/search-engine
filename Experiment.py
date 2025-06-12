@@ -52,7 +52,10 @@ class Experiment():
         df_ans.to_csv(f'{out_dir}/{self.name}-test-results.csv', index=False)
 
         #Formatted result, for submitting to kaggle
-        ( df_ans[['qid', 'docno']]
-            .rename(columns={'qid': 'QueryId', 'docno': 'EntityId'})
-            .to_csv(f'{out_dir}/{self.name}-submit-results.csv', index=False)
-        )
+        formatted= df_ans[['qid', 'docno']].rename(columns={'qid': 'QueryId', 'docno': 'EntityId'})
+
+        #Format qid
+        formatted['QueryId'] = formatted['QueryId'].astype(str).str.zfill(3)
+        
+        #Save
+        formatted.to_csv(f'{out_dir}/{self.name}-submit-results.csv', index=False)

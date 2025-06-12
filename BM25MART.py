@@ -7,7 +7,7 @@ import pandas as pd
 
 class BM25MART(Experiment):
     '''BM25 with LambdaMART'''
-    def __init__(self, index_path: str, topics_path: str, qrels_path: str, corpus_path: str= ''):
+    def __init__(self, index_path: str, topics_path: str, qrels_path: str, corpus_path: str= '', testing=True):
         super().__init__(index_path, corpus_path)
 
         #Make sure we have 3 fields on the index
@@ -52,23 +52,27 @@ class BM25MART(Experiment):
             title ** body ** keywords ** #Fielded BM25
             dph ** pl2 ** #Other retrieval models
             query_len ** doc_len_text ** #Static features
-            initial_retrieval #Also use initial retrieval signal
-            ** dfr ** dlh ** # ADD NEW MODELS
-            sdm# ADD PROXIMITY
-            #** dph_title ** dph_text ** dph_keywords **
-            #pl2_title ** pl2_text ** pl2_keywords
+            initial_retrieval ** #Also use initial retrieval signal
+            dfr ** dlh ** # ADD NEW MODELS
+            dph_title ** dph_text ** dph_keywords **
+            pl2_title ** pl2_text ** pl2_keywords **
+            sdm
         )
 
         #Establishing LTR --
         #this configures xgb as LambdaMART
-        lmart = xgb.sklearn.XGBRanker(objective='rank:ndcg',
+        lmart = xgb.XGBRanker(
+            objective='rank:ndcg',
+            eval_metric=['ndcg@100'],
             learning_rate=0.05,
-            gamma=1.0,
-            min_child_weight=0.1,
-            n_estimators=200,
+            n_estimators=2000, #High amount, apply early stopping to prevent overfitting
+            early_stopping_rounds=50, #Stop after 50 rounds of ndcg not improving
             max_depth=6,
-            verbose=2,
-            random_state=42)
+            subsample=0.8, #Fraction of training data sampled for each boosting round
+            colsample_bytree=0.8, #Fraction of features randomly sampled for each boosting round
+            tree_method='hist',
+            random_state=42 # for reproducibility
+        )
         lambdaMART = pt.ltr.apply_learned_model(lmart, form='ltr')
         
         #Building the full pipeline -- 
@@ -82,18 +86,30 @@ class BM25MART(Experiment):
         topics = pd.read_csv(topics_path, 
                              dtype={'qid': 'object', 'query': 'object'})
         
-        train_topics, valid_topics, test_topics = np.split( #shuffle topics
-            topics.sample(frac=1, random_state=43),
-            [int(.6*len(topics)), int(.8*len(topics))]
-        )
+        #Use this for general testing! Divides the dataset more, but allows to see our nDCG
+        if testing:
+            train_topics, valid_topics, test_topics = np.split( #shuffle topics
+                topics.sample(frac=1, random_state=43),
+                [int(.6*len(topics)), int(.8*len(topics))]
+            )
+        else:
+            #Use this for submitting, so we can train on a larger dataset
+            train_topics, valid_topics = np.split( #shuffle topics
+                topics.sample(frac=1, random_state=43),
+                [int(.8*len(topics))]
+            )
+
 
         self.search_pipeline.fit(train_topics, qrels, valid_topics, qrels)
+        print("Feature importances:")
         print(lmart.feature_importances_)
 
-        ans = pt.Experiment([self.search_pipeline], test_topics, qrels, 
-                            eval_metrics=['recip_rank', 'ndcg_cut', 'recall'], 
-                            names=[self.name])
-        print(ans)
+        if testing:
+            ans = pt.Experiment([self.search_pipeline], test_topics, qrels, 
+                                eval_metrics=['recip_rank', 'ndcg_cut', 'recall'], 
+                                names=[self.name])
+            print("Benchmark on test topics:")
+            print(ans)
             
     def get_index(self, index_path: str):
         return pt.IndexFactory.of(f"{index_path}/data.properties")
@@ -107,8 +123,8 @@ class BM25MART(Experiment):
 
 
 if __name__ == '__main__':
-    s = BM25MART('./terrier_index_fields', './queries/train_queries.csv', './queries/train_qrels.csv', './dataset/corpus.jsonl')
+    s = BM25MART('./indexes/terrier_index_fields', './queries/train_queries.csv', './queries/train_qrels.csv', testing=False)
     #!!! UPDATE DATA.PROPERTIES index.direct.fields.names and index.inverted.fields.names TO UPPERCASE LATER (TITLE,TEXT,KEYWORDS)
 
-    s.benchmark('./queries/train_queries.csv', './queries/train_qrels.csv')
+    #s.benchmark('./queries/train_queries.csv', './queries/train_qrels.csv')
     s.results_tests('./queries/test_queries.csv', './queries')
