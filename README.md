@@ -8,7 +8,7 @@ For our best submission, we aimed to use neural techniques that tended to genera
 
 The picture below shows our final pipeline. For more specific details, [check out the report](./report.pdf) (in Brazillian Portuguese), containing the specific techniques used for our top 5 best submissions.
 
-![](./pipe-1-1.png)
+![pipeline](./pipe-1-1.png)
 
 ## Usage
 
