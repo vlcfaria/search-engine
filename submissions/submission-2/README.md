@@ -1,0 +1,3 @@
+# Submissão 3
+
+Source code disponível na pasta. Corpus "reduzido" utilizado pode ser encontrado [nesse link](https://drive.google.com/file/d/1Xl1aqIEYV8jg6iB3R3FkKbNeckH0AK4Q/view?usp=sharing). Para indexação, utilizar o script `ColBERT.py`. Para busca, utilizar o script `query_colbert`. Ambos scripts possuem argumentos, para mais detalhes da execução dos dois scripts, rodar com o parâmetro `-h`. O corpus reduzido pode ser reconstruído com o mesmo notebook da submissão 3/5, com leves modificações.
